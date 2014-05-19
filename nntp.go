@@ -60,6 +60,8 @@ type Conn struct {
 // A Group gives information about a single news group on the server.
 type Group struct {
 	Name string
+	// Count of messages in the group
+	Count int
 	// High and low message-numbers
 	High, Low int
 	// Status indicates if general posting is allowed --
@@ -172,6 +174,18 @@ func (a *Article) String() string {
 
 func (a *Article) WriteTo(w io.Writer) (int64, error) {
 	return io.Copy(w, &articleReader{a: a})
+}
+
+func IsProtocol(err error) bool {
+	_, ok := err.(ProtocolError)
+	return ok
+}
+
+func ErrorCode(err error) uint {
+	if nntpErr, ok := err.(Error); ok {
+		return nntpErr.Code
+	}
+	return 0
 }
 
 func (p ProtocolError) Error() string {
@@ -443,7 +457,7 @@ func parseGroups(lines []string) ([]*Group, error) {
 		if err != nil {
 			return nil, ProtocolError("bad number in line: " + line)
 		}
-		res = append(res, &Group{ss[0], high, low, ss[3]})
+		res = append(res, &Group{Name: ss[0], High: high, Low: low, Status: ss[3]})
 	}
 	return res, nil
 }
@@ -496,12 +510,20 @@ func (c *Conn) List(a ...string) ([]string, error) {
 }
 
 // Group changes the current group.
-func (c *Conn) Group(group string) (number, low, high int, err error) {
+func (c *Conn) Group(group string) (status *Group, err error) {
 	_, line, err := c.cmd(211, "GROUP %s", group)
 	if err != nil {
 		return
 	}
 
+	status, err = parseGroupStatus(line)
+	if err != nil {
+		status.Name = group
+	}
+	return
+}
+
+func parseGroupStatus(line string) (status *Group, err error) {
 	ss := strings.SplitN(line, " ", 4) // intentional -- we ignore optional message
 	if len(ss) < 3 {
 		err = ProtocolError("bad group response: " + line)
@@ -517,7 +539,68 @@ func (c *Conn) Group(group string) (number, low, high int, err error) {
 		}
 		n[i] = c
 	}
-	number, low, high = n[0], n[1], n[2]
+	status = &Group{Count: n[0], Low: n[1], High: n[2]}
+	return
+}
+
+type GroupListing struct {
+	Group
+	Articles []int
+}
+
+// ListGroup changes the current group.
+func (c *Conn) ListGroup(group string, from, to int) (listing *GroupListing, err error) {
+	cmd := fmt.Sprintf("LISTGROUP %s", group)
+	if from >= 0 {
+		cmd = fmt.Sprintf("%s %d-", cmd, from)
+	}
+	if to >= 0 {
+		cmd = fmt.Sprintf("%s%d", cmd, to)
+	}
+	fmt.Println(cmd)
+
+	_, line, err := c.cmd(211, cmd)
+	if err != nil {
+		return
+	}
+	ss := strings.SplitN(line, " ", 4)
+	var status *Group
+	if len(ss) >= 3 {
+		status, err = parseGroupStatus(line)
+		if err != nil {
+			return
+		}
+		status.Name = group
+	} else {
+		status = &Group{Name: group}
+	}
+
+	listing = &GroupListing{Group: *status}
+
+	br := bufio.NewReader(c.body())
+	eof := false
+	for {
+		line, err := br.ReadString('\n')
+		if err == io.EOF {
+			eof = true
+		} else if err != nil {
+			return nil, err
+		}
+		if eof && len(line) == 0 {
+			break
+		}
+		line = strings.TrimSpace(line)
+		if line == "." {
+			break
+		}
+		num, err := strconv.Atoi(line)
+		if err != nil {
+			// TODO: warn but do not fail on a bulk operation
+			return nil, err
+		}
+		listing.Articles = append(listing.Articles, num)
+	}
+
 	return
 }
 
