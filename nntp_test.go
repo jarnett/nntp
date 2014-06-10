@@ -65,7 +65,8 @@ func TestBasics(t *testing.T) {
 	tt := time.Date(2010, time.March, 01, 00, 0, 0, 0, time.UTC)
 
 	const grp = "gmane.comp.lang.go.general"
-	_, l, h, err := conn.Group(grp)
+	group, err := conn.Group(grp)
+	l, h := group.Low, group.High
 	if err != nil {
 		t.Fatal("Group shouldn't error: " + err.Error())
 	}
