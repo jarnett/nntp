@@ -61,9 +61,9 @@ type Conn struct {
 type Group struct {
 	Name string
 	// Count of messages in the group
-	Count int
+	Count int64
 	// High and low message-numbers
-	High, Low int
+	High, Low int64
 	// Status indicates if general posting is allowed --
 	// typical values are "y", "n", or "m".
 	Status string
@@ -384,7 +384,7 @@ func (c *Conn) NewNews(group string, since time.Time) ([]string, error) {
 
 // Overview of a message returned by OVER command.
 type MessageOverview struct {
-	MessageNumber int       // Message number in the group
+	MessageNumber int64       // Message number in the group
 	Subject       string    // Subject header value. Empty if the header is missing.
 	From          string    // From header value. Empty is the header is missing.
 	Date          time.Time // Parsed Date header value. Zero if the header is missing or unparseable.
@@ -397,7 +397,7 @@ type MessageOverview struct {
 
 // Overview returns overviews of all messages in the current group with message number between
 // begin and end, inclusive.
-func (c *Conn) Overview(begin, end int) ([]MessageOverview, error) {
+func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 	if _, _, err := c.cmd(224, "OVER %d-%d", begin, end); err != nil {
 		return nil, err
 	}
@@ -414,7 +414,7 @@ func (c *Conn) Overview(begin, end int) ([]MessageOverview, error) {
 		if len(ss) < 8 {
 			return nil, ProtocolError("short header listing line: " + line + strconv.Itoa(len(ss)))
 		}
-		overview.MessageNumber, err = strconv.Atoi(ss[0])
+		overview.MessageNumber, err = strconv.ParseInt(ss[0], 10, 64)
 		if err != nil {
 			return nil, ProtocolError("bad message number '" + ss[0] + "' in line: " + line)
 		}
@@ -449,11 +449,11 @@ func parseGroups(lines []string) ([]*Group, error) {
 		if len(ss) < 4 {
 			return nil, ProtocolError("short group info line: " + line)
 		}
-		high, err := strconv.Atoi(ss[1])
+		high, err := strconv.ParseInt(ss[1], 10, 64)
 		if err != nil {
 			return nil, ProtocolError("bad number in line: " + line)
 		}
-		low, err := strconv.Atoi(ss[2])
+		low, err := strconv.ParseInt(ss[2], 10, 64)
 		if err != nil {
 			return nil, ProtocolError("bad number in line: " + line)
 		}
@@ -530,9 +530,9 @@ func parseGroupStatus(line string) (status *Group, err error) {
 		return
 	}
 
-	var n [3]int
+	var n [3]int64
 	for i, _ := range n {
-		c, e := strconv.Atoi(ss[i])
+		c, e := strconv.ParseInt(ss[i], 10, 64)
 		if e != nil {
 			err = ProtocolError("bad group response: " + line)
 			return
@@ -545,11 +545,11 @@ func parseGroupStatus(line string) (status *Group, err error) {
 
 type GroupListing struct {
 	Group
-	Articles []int
+	Articles []int64
 }
 
 // ListGroup changes the current group.
-func (c *Conn) ListGroup(group string, from, to int) (listing *GroupListing, err error) {
+func (c *Conn) ListGroup(group string, from, to int64) (listing *GroupListing, err error) {
 	cmd := fmt.Sprintf("LISTGROUP %s", group)
 	if from >= 0 {
 		cmd = fmt.Sprintf("%s %d-", cmd, from)
@@ -593,7 +593,7 @@ func (c *Conn) ListGroup(group string, from, to int) (listing *GroupListing, err
 		if line == "." {
 			break
 		}
-		num, err := strconv.Atoi(line)
+		num, err := strconv.ParseInt(line, 10, 64)
 		if err != nil {
 			// TODO: warn but do not fail on a bulk operation
 			return nil, err
