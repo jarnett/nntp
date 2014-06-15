@@ -321,6 +321,10 @@ func TestHacks(t *testing.T) {
 		t.Fatal("Second overview shouldn't error: " + err.Error())
 	}
 
+	if _, err := conn.Overview(59034, 59034); err != nil {
+		t.Fatal("Third overview shouldn't error: " + err.Error())
+	}
+
 	actualcmds := cmdbuf.String()
 	if hackClient != actualcmds {
 		t.Fatalf("Got: %q\nExpected: %q", actualcmds, hackClient)
@@ -336,6 +340,10 @@ var hackServer = `211 6117 53009 59125 uk.politics.drugs
 224 data follows 
 53102	Re: Two men to be hanged for trafficking in cannabis	johannes <johs@sizef3367786864itter.com>	Sat, 11 Oct 2008 00:10:24 +0100	<48EFE0E0.229481B@sizef3367786864itter.com>	<6l64q5FaqjquU1@mid.individual.net> <fNadnZpn3tWKYXDVRVnytQA@pipex.net> 		<6l6f92FavfkiU1@mid.individual.net> <d0eecf41-9924-4955-96a5-a53c8d3ddca8@a2g2000prm.googlegroups.com> 		<329te4dpc4sgvluren79qn4s38ubasea5m@4ax.com> <6l8guvFb321kU2@mid.individual.net> 		<7u2dneydodp0F3LVnZ2dnUVZ8t3inZ2d@bt.com> <62a152c0-f62c-4786-b454-fd9e8d05e68a@m74g2000hsh.googlegroups.com>	1558	27	Xref: news-big.astraweb.com talk.politics.drugs:181567 uk.legal:937888 uk.politics.drugs:53102 rec.drugs.cannabis:25907
 .
+500 What?
+224 data follows 
+59034	Campaigning against the 'war on drugs'	tomcosta43@gmail.com	Sat, 1 Sep 2012 05:08:18 -0700 (PDT)	<d6575f22-6b6a-42d2-9d40-08e808f0ee78@googlegroups.com>	<s46dndUc54vjTkLTnZ2dnUVZ8kadnZ2d@bt.com>	1390		Xref: news-big.astraweb.com uk.politics.drugs:59034
+.
 `
 
 var hackClient = `GROUP uk.politics.drugs
@@ -343,4 +351,6 @@ OVER 55010-55010
 XOVER 55010-55010
 OVER 53102-53102
 XOVER 53102-53102
+OVER 59034-59034
+XOVER 59034-59034
 `

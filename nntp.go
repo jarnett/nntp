@@ -481,8 +481,9 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 		}
 
 		overview.References = strings.Split(ss[5], " ") // Message-Id's contain no spaces, so this is safe.
-		overview.Lines, err = strconv.Atoi(ss[7])
-		if err != nil {
+		if ss[7] == "" {
+			overview.Lines = 0		// unspecified
+		} else if overview.Lines, err = strconv.Atoi(ss[7]); err != nil {
 			return nil, ProtocolError(fmt.Sprintf("bad line count %q in line %q (split into %#v)", ss[7], line, ss)) // eww, string formatting
 		}
 		overview.Extra = append([]string{}, ss[8:]...)
