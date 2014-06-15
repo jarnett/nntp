@@ -51,7 +51,8 @@ type ProtocolError string
 // an io.Reader), that io.Reader is only valid until the next call to a
 // method of Conn.
 type Conn struct {
-	conn  io.WriteCloser
+	conn  io.ReadWriteCloser
+	w     io.Writer
 	r     *bufio.Reader
 	br    *bodyReader
 	close bool
@@ -206,6 +207,7 @@ func maybeId(cmd, id string) string {
 func newConn(c net.Conn) (res *Conn, err error) {
 	res = &Conn{
 		conn: c,
+		w:    c,
 		r:    bufio.NewReaderSize(c, 4096),
 	}
 
@@ -254,6 +256,25 @@ func DialTLS(network, addr string, config *tls.Config) (*Conn, error) {
 	}
 	// return nntp Conn
 	return newConn(c)
+}
+
+// Enables tracing, such that future IO gets dumped to the indicated writers,
+// replacing any current tracing configuration.
+//
+// This discards the contents of the current server-to-client receive buffer
+// and should therefore not be attempted while any commands are in progress.
+func (c *Conn) Trace(c2s, s2c io.Writer) {
+	if c2s != nil {
+		c.w = io.MultiWriter(c.conn, c2s)
+	} else {
+		c.w = c.conn
+	}
+
+	if s2c != nil {
+		c.r.Reset(io.TeeReader(c.conn, s2c))
+	} else {
+		c.r.Reset(c.conn)
+	}
 }
 
 func (c *Conn) body() io.Reader {
@@ -309,7 +330,7 @@ func (c *Conn) cmd(expectCode uint, format string, args ...interface{}) (code ui
 		}
 		c.br = nil
 	}
-	if _, err := fmt.Fprintf(c.conn, format+"\r\n", args...); err != nil {
+	if _, err := fmt.Fprintf(c.w, format+"\r\n", args...); err != nil {
 		return 0, "", err
 	}
 	line, err = c.r.ReadString('\n')
@@ -716,7 +737,7 @@ func (c *Conn) RawPost(r io.Reader) error {
 		if strings.HasPrefix(line, ".") {
 			prefix = "."
 		}
-		_, err = fmt.Fprintf(c.conn, "%s%s\r\n", prefix, line)
+		_, err = fmt.Fprintf(c.w, "%s%s\r\n", prefix, line)
 		if err != nil {
 			return err
 		}

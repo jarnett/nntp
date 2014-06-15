@@ -25,6 +25,10 @@ type faker struct {
 	io.Writer
 }
 
+func (f faker) Read([]byte) (int, error) {
+	panic("reads should be served by the bufio")
+}
+
 func (f faker) Close() error {
 	return nil
 }
@@ -37,7 +41,7 @@ func TestBasics(t *testing.T) {
 	var fake faker
 	fake.Writer = &cmdbuf
 
-	conn := &Conn{conn: fake, r: bufio.NewReader(strings.NewReader(basicServer))}
+	conn := &Conn{conn: fake, w: fake, r: bufio.NewReader(strings.NewReader(basicServer))}
 
 	// Test some global commands that don't take arguments
 	if _, err := conn.Capabilities(); err != nil {
