@@ -432,14 +432,28 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 			return nil, err
 		}
 	}
+	
+	return parseOverview(c.r)
+}
 
-	lines, err := c.readStrings()
-	if err != nil {
-		return nil, err
-	}
+func parseOverview(r *bufio.Reader) ([]MessageOverview, error) {
+	result := make([]MessageOverview, 0)
 
-	result := make([]MessageOverview, 0, len(lines))
-	for _, line := range lines {
+	for {
+		line, err := r.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		if strings.HasSuffix(line, "\r\n") {
+			line = line[0 : len(line)-2]
+		} else if strings.HasSuffix(line, "\n") {
+			line = line[0 : len(line)-1]
+		}
+		
+		if line == "." {
+			break
+		}
+
 		overview := MessageOverview{}
 		ss := strings.Split(strings.TrimSpace(line), "\t")
 		if len(ss) < 8 {
@@ -489,6 +503,7 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 		overview.Extra = append([]string{}, ss[8:]...)
 		result = append(result, overview)
 	}
+	
 	return result, nil
 }
 
