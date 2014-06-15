@@ -275,3 +275,62 @@ NEWGROUPS 20100301 000000 GMT
 OVER 10-11
 QUIT
 `
+
+func TestHacks(t *testing.T) {
+	hackServer = strings.Join(strings.Split(hackServer, "\n"), "\r\n")
+	hackClient = strings.Join(strings.Split(hackClient, "\n"), "\r\n")
+
+	var cmdbuf bytes.Buffer
+	var fake faker
+	fake.Writer = &cmdbuf
+
+	conn := &Conn{conn: fake, w: fake, r: bufio.NewReader(strings.NewReader(hackServer))}
+
+	_, err := conn.Group("uk.politics.drugs")
+	if err != nil {
+		t.Fatal("Group shouldn't error: " + err.Error())
+	}
+
+	expectedReferences := []string{
+		"<10ne25lo0a67kjvj3p3juj4e6fo12ci90o@4ax.com>",
+		"<h08prb$fv7$1@frank-exchange-of-views.oucs.ox.ac.uk>",
+		"<A6OdnZqzDpzeabrXnZ2dnUVZ8qKdnZ2d@bt.com>",
+		"<h08stk$gu3$1@frank-exchange-of-views.oucs.ox.ac.uk>",
+		"<3pWdnaRmM9h1ZbrXnZ2dneKdnZydnZ2d@bt.com>",
+		"<h0gorg$st2$1@localhost.localdomain>",
+		"<Y7qdnV1ox7f7TLHXnZ2dnUVZ8gKdnZ2d@bt.com>",
+		"<1fop259hut1lguvpi1crbtadtpjeaq0ttg@4ax.com>",
+		"<J6Odnd0x_MSkd7HXnZ2dnUVZ8q2dnZ2d@bt.com>",
+		"<a03bfa3d-9d7b-46f8-a4e4-8d279612a157@y7g2000yqa.googlegroups.com>",
+		"<rvadnaNGnI_ulrDXnZ2dnUVZ8nqdnZ2d@bt.com>",
+	}
+
+	if articles, err := conn.Overview(55010, 55010); err != nil {
+		t.Fatal("Overview shouldn't error: " + err.Error())
+	} else if len(articles) != 1 {
+		t.Fatalf("Expected 1 article, got: %+v", articles)
+	} else if articles[0].Subject != "Re: Supermarket staff stab customer to death for complaining" {
+		t.Fatal("Article has wrong subject")
+	} else if articles[0].Bytes != 1935 {
+		t.Fatal("Article has wrong byte count")
+	} else if strings.Join(articles[0].References, "\n") != strings.Join(expectedReferences, "\n") {
+		t.Fatal("Article has wrong references")
+	}
+
+	actualcmds := cmdbuf.String()
+	if hackClient != actualcmds {
+		t.Fatalf("Got: %q\nExpected: %q", actualcmds, hackClient)
+	}
+}
+
+var hackServer = `211 6117 53009 59125 uk.politics.drugs
+500 What?
+224 data follows 
+55010	Re: Supermarket staff stab customer to death for complaining	Jethro <jethro_uk@hotmail.com>	Mon, 8 Jun 2009 06:27:41 -0700 (PDT)	<162bacd2-b4d5-490b-b98f-944b1ae27d28@h28g2000yqd.googlegroups.com>	<10ne25lo0a67kjvj3p3juj4e6fo12ci90o@4ax.com> <h08prb$fv7$1@frank-exchange-of-views.oucs.ox.ac.uk> 	<A6OdnZqzDpzeabrXnZ2dnUVZ8qKdnZ2d@bt.com> <h08stk$gu3$1@frank-exchange-of-views.oucs.ox.ac.uk> 	<3pWdnaRmM9h1ZbrXnZ2dneKdnZydnZ2d@bt.com> <h0gorg$st2$1@localhost.localdomain> 	<Y7qdnV1ox7f7TLHXnZ2dnUVZ8gKdnZ2d@bt.com> <1fop259hut1lguvpi1crbtadtpjeaq0ttg@4ax.com> 	<J6Odnd0x_MSkd7HXnZ2dnUVZ8q2dnZ2d@bt.com> <a03bfa3d-9d7b-46f8-a4e4-8d279612a157@y7g2000yqa.googlegroups.com> 	<rvadnaNGnI_ulrDXnZ2dnUVZ8nqdnZ2d@bt.com>	1935	55	Xref: news-big.astraweb.com uk.legal:1033432 uk.politics.misc:1593178 uk.politics.drugs:55010
+.
+`
+
+var hackClient = `GROUP uk.politics.drugs
+OVER 55010-55010
+XOVER 55010-55010
+`

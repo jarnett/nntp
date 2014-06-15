@@ -441,7 +441,7 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 	result := make([]MessageOverview, 0, len(lines))
 	for _, line := range lines {
 		overview := MessageOverview{}
-		ss := strings.SplitN(strings.TrimSpace(line), "\t", 9)
+		ss := strings.Split(strings.TrimSpace(line), "\t")
 		if len(ss) < 8 {
 			return nil, ProtocolError("short header listing line: " + line + strconv.Itoa(len(ss)))
 		}
@@ -457,14 +457,33 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 			overview.Date = time.Time{}
 		}
 		overview.MessageId = ss[4]
-		overview.References = strings.Split(ss[5], " ") // Message-Id's contain no spaces, so this is safe.
-		overview.Bytes, err = strconv.Atoi(ss[6])
-		if err != nil {
-			return nil, ProtocolError("bad byte count '" + ss[6] + "'in line:" + line)
+
+		// At least one server in the wild returns tab delimited references. This sucks.
+		//
+		// As a hack: as long as ss[6] isn't parseable as number of bytes and there are extra
+		// tab-delimited fields, assume ss[6] is a continuation of ss[5], and glue the fields
+		// together.
+		//
+		// This doesn't break anything on "normal" servers and works around this particular
+		// failure mode.
+		for {
+			if ss[6] == "" || len(ss) < 8 {
+				break
+			}
+
+			overview.Bytes, err = strconv.Atoi(ss[6])
+			if err != nil {
+				ss[5] = ss[5] + ss[6]
+				ss = append(ss[:6], ss[7:]...)
+			} else {
+				break
+			}
 		}
+
+		overview.References = strings.Split(ss[5], " ") // Message-Id's contain no spaces, so this is safe.
 		overview.Lines, err = strconv.Atoi(ss[7])
 		if err != nil {
-			return nil, ProtocolError("bad line count '" + ss[7] + "'in line:" + line)
+			return nil, ProtocolError(fmt.Sprintf("bad line count %q in line %q (split into %#v)", ss[7], line, ss)) // eww, string formatting
 		}
 		overview.Extra = append([]string{}, ss[8:]...)
 		result = append(result, overview)
