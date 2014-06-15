@@ -405,7 +405,7 @@ func (c *Conn) NewNews(group string, since time.Time) ([]string, error) {
 
 // Overview of a message returned by OVER command.
 type MessageOverview struct {
-	MessageNumber int64       // Message number in the group
+	MessageNumber int64     // Message number in the group
 	Subject       string    // Subject header value. Empty if the header is missing.
 	From          string    // From header value. Empty is the header is missing.
 	Date          time.Time // Parsed Date header value. Zero if the header is missing or unparseable.
@@ -487,6 +487,13 @@ func parseGroups(lines []string) ([]*Group, error) {
 // Not all servers support capabilities.
 func (c *Conn) Capabilities() ([]string, error) {
 	if _, _, err := c.cmd(101, "CAPABILITIES"); err != nil {
+		return nil, err
+	}
+	return c.readStrings()
+}
+
+func (c *Conn) ListExtensions() ([]string, error) {
+	if _, _, err := c.cmd(202, "LIST EXTENSIONS"); err != nil {
 		return nil, err
 	}
 	return c.readStrings()

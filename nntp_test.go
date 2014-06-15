@@ -48,6 +48,12 @@ func TestBasics(t *testing.T) {
 		t.Fatal("should be able to request CAPABILITIES after connecting: " + err.Error())
 	}
 
+	if exts, err := conn.ListExtensions(); err != nil {
+		t.Fatal("should be able to request LIST EXTENSIONS after connecting: " + err.Error())
+	} else if strings.Join(exts, " + ") != "HDR + OVER" {
+		t.Fatal("should return HDR + OVER")
+	}
+
 	_, err := conn.Date()
 	if err != nil {
 		t.Fatal("should be able to send DATE: " + err.Error())
@@ -176,7 +182,7 @@ Body.
 
 	for i, o := range overviews {
 		if fmt.Sprint(o) != fmt.Sprint(expectedOverviews[i]) {
-			t.Fatalf("in place of %dth overview expected %v, got %v", i, expectedOverviews[i], o)
+			t.Fatalf("in place of %dth overview expected %+v, got %+v", i, expectedOverviews[i], o)
 		}
 	}
 
@@ -192,6 +198,10 @@ Body.
 
 var basicServer = `101 Capability list:
 VERSION 2
+.
+202 Extensions supported:
+HDR
+OVER
 .
 111 20100329034158
 215 Blah blah
@@ -246,6 +256,7 @@ Fin.
 `
 
 var basicClient = `CAPABILITIES
+LIST EXTENSIONS
 DATE
 LIST
 GROUP gmane.comp.lang.go.general
