@@ -467,7 +467,7 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 		// This doesn't break anything on "normal" servers and works around this particular
 		// failure mode.
 		for {
-			if ss[6] == "" || len(ss) < 8 {
+			if len(ss) < 8 {
 				break
 			}
 

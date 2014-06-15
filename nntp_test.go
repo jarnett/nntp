@@ -317,6 +317,10 @@ func TestHacks(t *testing.T) {
 		t.Fatal("Article has wrong references")
 	}
 
+	if _, err := conn.Overview(53102, 53102); err != nil {
+		t.Fatal("Second overview shouldn't error: " + err.Error())
+	}
+
 	actualcmds := cmdbuf.String()
 	if hackClient != actualcmds {
 		t.Fatalf("Got: %q\nExpected: %q", actualcmds, hackClient)
@@ -328,9 +332,15 @@ var hackServer = `211 6117 53009 59125 uk.politics.drugs
 224 data follows 
 55010	Re: Supermarket staff stab customer to death for complaining	Jethro <jethro_uk@hotmail.com>	Mon, 8 Jun 2009 06:27:41 -0700 (PDT)	<162bacd2-b4d5-490b-b98f-944b1ae27d28@h28g2000yqd.googlegroups.com>	<10ne25lo0a67kjvj3p3juj4e6fo12ci90o@4ax.com> <h08prb$fv7$1@frank-exchange-of-views.oucs.ox.ac.uk> 	<A6OdnZqzDpzeabrXnZ2dnUVZ8qKdnZ2d@bt.com> <h08stk$gu3$1@frank-exchange-of-views.oucs.ox.ac.uk> 	<3pWdnaRmM9h1ZbrXnZ2dneKdnZydnZ2d@bt.com> <h0gorg$st2$1@localhost.localdomain> 	<Y7qdnV1ox7f7TLHXnZ2dnUVZ8gKdnZ2d@bt.com> <1fop259hut1lguvpi1crbtadtpjeaq0ttg@4ax.com> 	<J6Odnd0x_MSkd7HXnZ2dnUVZ8q2dnZ2d@bt.com> <a03bfa3d-9d7b-46f8-a4e4-8d279612a157@y7g2000yqa.googlegroups.com> 	<rvadnaNGnI_ulrDXnZ2dnUVZ8nqdnZ2d@bt.com>	1935	55	Xref: news-big.astraweb.com uk.legal:1033432 uk.politics.misc:1593178 uk.politics.drugs:55010
 .
+500 What?
+224 data follows 
+53102	Re: Two men to be hanged for trafficking in cannabis	johannes <johs@sizef3367786864itter.com>	Sat, 11 Oct 2008 00:10:24 +0100	<48EFE0E0.229481B@sizef3367786864itter.com>	<6l64q5FaqjquU1@mid.individual.net> <fNadnZpn3tWKYXDVRVnytQA@pipex.net> 		<6l6f92FavfkiU1@mid.individual.net> <d0eecf41-9924-4955-96a5-a53c8d3ddca8@a2g2000prm.googlegroups.com> 		<329te4dpc4sgvluren79qn4s38ubasea5m@4ax.com> <6l8guvFb321kU2@mid.individual.net> 		<7u2dneydodp0F3LVnZ2dnUVZ8t3inZ2d@bt.com> <62a152c0-f62c-4786-b454-fd9e8d05e68a@m74g2000hsh.googlegroups.com>	1558	27	Xref: news-big.astraweb.com talk.politics.drugs:181567 uk.legal:937888 uk.politics.drugs:53102 rec.drugs.cannabis:25907
+.
 `
 
 var hackClient = `GROUP uk.politics.drugs
 OVER 55010-55010
 XOVER 55010-55010
+OVER 53102-53102
+XOVER 53102-53102
 `
