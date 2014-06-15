@@ -420,7 +420,17 @@ type MessageOverview struct {
 // begin and end, inclusive.
 func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 	if _, _, err := c.cmd(224, "OVER %d-%d", begin, end); err != nil {
-		return nil, err
+		if nerr, ok := err.(Error); ok && nerr.Code == 500 {
+			// This could mean that OVER isn't supported.
+			// Attempt XOVER instead.
+			if _, _, xerr := c.cmd(224, "XOVER %d-%d", begin, end); xerr != nil {
+				// XOVER failed too. Return the original error.
+				return nil, err
+			}
+		} else {
+			// Some other type of error.
+			return nil, err
+		}
 	}
 
 	lines, err := c.readStrings()
