@@ -248,6 +248,7 @@ Fin.
 .
 231 New newsgroups follow
 .
+500 Not supported
 224 Overview information for 10-11 follows
 10	Subject10	Author <author@server>	Sat, 18 Oct 2003 18:00:00 +0030	<d@e.f>		1000	9
 11	Subject11		18 Oct 2003 19:00:00 +0030	<e@f.g>	<d@e.f> <a@b.c>	2000	18	Extra stuff
@@ -272,6 +273,7 @@ HEAD 101
 BODY 1
 NEWNEWS gmane.comp.lang.go.general 20100301 000000 GMT
 NEWGROUPS 20100301 000000 GMT
+XZVER 10-11
 OVER 10-11
 QUIT
 `
@@ -332,6 +334,7 @@ func TestHacks(t *testing.T) {
 }
 
 var hackServer = `211 6117 53009 59125 uk.politics.drugs
+500 Not supported
 500 What?
 224 data follows 
 55010	Re: Supermarket staff stab customer to death for complaining	Jethro <jethro_uk@hotmail.com>	Mon, 8 Jun 2009 06:27:41 -0700 (PDT)	<162bacd2-b4d5-490b-b98f-944b1ae27d28@h28g2000yqd.googlegroups.com>	<10ne25lo0a67kjvj3p3juj4e6fo12ci90o@4ax.com> <h08prb$fv7$1@frank-exchange-of-views.oucs.ox.ac.uk> 	<A6OdnZqzDpzeabrXnZ2dnUVZ8qKdnZ2d@bt.com> <h08stk$gu3$1@frank-exchange-of-views.oucs.ox.ac.uk> 	<3pWdnaRmM9h1ZbrXnZ2dneKdnZydnZ2d@bt.com> <h0gorg$st2$1@localhost.localdomain> 	<Y7qdnV1ox7f7TLHXnZ2dnUVZ8gKdnZ2d@bt.com> <1fop259hut1lguvpi1crbtadtpjeaq0ttg@4ax.com> 	<J6Odnd0x_MSkd7HXnZ2dnUVZ8q2dnZ2d@bt.com> <a03bfa3d-9d7b-46f8-a4e4-8d279612a157@y7g2000yqa.googlegroups.com> 	<rvadnaNGnI_ulrDXnZ2dnUVZ8nqdnZ2d@bt.com>	1935	55	Xref: news-big.astraweb.com uk.legal:1033432 uk.politics.misc:1593178 uk.politics.drugs:55010
@@ -347,6 +350,7 @@ var hackServer = `211 6117 53009 59125 uk.politics.drugs
 `
 
 var hackClient = `GROUP uk.politics.drugs
+XZVER 55010-55010
 OVER 55010-55010
 XOVER 55010-55010
 OVER 53102-53102

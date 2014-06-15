@@ -9,6 +9,7 @@ package nntp
 import (
 	"bufio"
 	"bytes"
+	"compress/flate"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -51,11 +52,15 @@ type ProtocolError string
 // an io.Reader), that io.Reader is only valid until the next call to a
 // method of Conn.
 type Conn struct {
-	conn  io.ReadWriteCloser
-	w     io.Writer
-	r     *bufio.Reader
-	br    *bodyReader
-	close bool
+	conn   io.ReadWriteCloser
+	w      io.Writer
+	r      *bufio.Reader
+	br     *bodyReader
+	close  bool
+	quirks struct {
+		xzverUnsupported bool
+		xzverSupported   bool
+	}
 }
 
 // A Group gives information about a single news group on the server.
@@ -419,6 +424,16 @@ type MessageOverview struct {
 // Overview returns overviews of all messages in the current group with message number between
 // begin and end, inclusive.
 func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
+	if !c.quirks.xzverUnsupported || c.quirks.xzverSupported {
+		// Try XZVERing: http://helpdesk.astraweb.com/index.php?_m=news&_a=viewnews&newsid=9
+		if _, _, xzerr := c.cmd(224, "XZVER %d-%d", begin, end); xzerr != nil {
+			c.quirks.xzverUnsupported = true
+		} else {
+			c.quirks.xzverSupported = true
+			return c.parseXzver()
+		}
+	}
+
 	if _, _, err := c.cmd(224, "OVER %d-%d", begin, end); err != nil {
 		if nerr, ok := err.(Error); ok && nerr.Code == 500 {
 			// This could mean that OVER isn't supported.
@@ -432,8 +447,35 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 			return nil, err
 		}
 	}
-	
+
 	return parseOverview(c.r)
+}
+
+func (c *Conn) parseXzver() (result []MessageOverview, err error) {
+	// XZVER is a yenc stream…
+	yencStream := &yencReader{r: c.r}
+	defer yencStream.Close()
+	
+	// containing a DEFLATE stream…
+	flateStream := flate.NewReader(yencStream)
+	defer flateStream.Close()
+	
+	// containing an overview stream…
+	result, err = parseOverview(bufio.NewReader(flateStream))
+
+	if err == nil {
+		// …with a dot at the end
+		flateStream.Close()
+		yencStream.Close()
+		
+		var line string
+		line, err = c.r.ReadString('\n')
+		if err == nil && strings.TrimRight(line, "\r\n") != "." {
+			return nil, fmt.Errorf("unexpected data after XZVER: %q", line)
+		}
+	}
+	
+	return
 }
 
 func parseOverview(r *bufio.Reader) ([]MessageOverview, error) {
@@ -441,7 +483,9 @@ func parseOverview(r *bufio.Reader) ([]MessageOverview, error) {
 
 	for {
 		line, err := r.ReadString('\n')
-		if err != nil {
+		if err == io.EOF {
+			return result, nil
+		} else if err != nil {
 			return nil, err
 		}
 		if strings.HasSuffix(line, "\r\n") {
@@ -449,7 +493,7 @@ func parseOverview(r *bufio.Reader) ([]MessageOverview, error) {
 		} else if strings.HasSuffix(line, "\n") {
 			line = line[0 : len(line)-1]
 		}
-		
+
 		if line == "." {
 			break
 		}
@@ -496,14 +540,14 @@ func parseOverview(r *bufio.Reader) ([]MessageOverview, error) {
 
 		overview.References = strings.Split(ss[5], " ") // Message-Id's contain no spaces, so this is safe.
 		if ss[7] == "" {
-			overview.Lines = 0		// unspecified
+			overview.Lines = 0 // unspecified
 		} else if overview.Lines, err = strconv.Atoi(ss[7]); err != nil {
 			return nil, ProtocolError(fmt.Sprintf("bad line count %q in line %q (split into %#v)", ss[7], line, ss)) // eww, string formatting
 		}
 		overview.Extra = append([]string{}, ss[8:]...)
 		result = append(result, overview)
 	}
-	
+
 	return result, nil
 }
 
