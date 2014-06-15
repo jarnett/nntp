@@ -1,7 +1,7 @@
-nntp.go
+nntp.go [![Build Status](https://drone.io/github.com/willglynn/nntp/status.png)](https://drone.io/github.com/willglynn/nntp/latest)
 =======
 
-An NNTP (news) Client package for go (golang). Forked from [nntp-go](http://code.google.com/p/nntp-go/) to bring it up to date.
+An NNTP (news) Client package for go (golang). Forked from [nntp-go](http://code.google.com/p/nntp-go/) and forked again from [chrisfarms/nntp](https://github.com/chrisfarms/nntp).
 
 Example
 -------
