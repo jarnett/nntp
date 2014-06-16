@@ -3,6 +3,13 @@ nntp.go [![Build Status](https://drone.io/github.com/willglynn/nntp/status.png)]
 
 An NNTP (news) Client package for go (golang). Forked from [nntp-go](http://code.google.com/p/nntp-go/) and forked again from [chrisfarms/nntp](https://github.com/chrisfarms/nntp).
 
+This fork contains support for:
+
+* Parsing broken overview responses
+* `XOVER` (attempted automatically when `OVER` fails)
+* `XZVER` (compressed headers, Astraweb style)
+* `XFEATURE COMPRESS GZIP` (compressed headers, Giganews style)
+
 Example
 -------
 
