@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/flate"
+	"compress/zlib"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -344,7 +345,7 @@ func (c *Conn) cmd(expectCode uint, format string, args ...interface{}) (code ui
 	}
 	line = strings.TrimSpace(line)
 	if len(line) < 4 || line[3] != ' ' {
-		return 0, "", ProtocolError("short response: " + line)
+		return 0, "", ProtocolError(fmt.Sprintf("short response: %+q", line))
 	}
 	i, err := strconv.ParseUint(line[0:3], 10, 0)
 	if err != nil {
@@ -434,11 +435,13 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 		}
 	}
 
-	if _, _, err := c.cmd(224, "OVER %d-%d", begin, end); err != nil {
+	var line string
+	var err, xerr error
+	if _, line, err = c.cmd(224, "OVER %d-%d", begin, end); err != nil {
 		if nerr, ok := err.(Error); ok && nerr.Code == 500 {
 			// This could mean that OVER isn't supported.
 			// Attempt XOVER instead.
-			if _, _, xerr := c.cmd(224, "XOVER %d-%d", begin, end); xerr != nil {
+			if _, line, xerr = c.cmd(224, "XOVER %d-%d", begin, end); xerr != nil {
 				// XOVER failed too. Return the original error.
 				return nil, err
 			}
@@ -447,8 +450,43 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 			return nil, err
 		}
 	}
+	
+	// if we're using XFEATURE COMPRESS GZIP, the response line seems to contain this magic string
+	// (I wish I had a spec for this…)
+	if strings.Contains(line, "[COMPRESS=GZIP]") {
+		// the result is gzipped
+		gz, gzerr := zlib.NewReader(c.r)
+		if gzerr != nil {
+			return nil, gzerr
+		}
+		
+		defer gz.Close()
+		
+		msgs, err := parseOverview(bufio.NewReader(gz))
+		if err != nil {
+			return nil, err
+		}
+		
+		if err := c.readDotLine(); err != nil {
+			return nil, err
+		}
+		
+		return msgs, nil
+		
+	} else {
+		// plain response
+		return parseOverview(c.r)
+	}
+}
 
-	return parseOverview(c.r)
+func (c *Conn) readDotLine() error {
+	if line, err := c.r.ReadString('\n'); err != nil {
+		return err
+	} else if strings.TrimRight(line, "\r\n") != "." {
+		return ProtocolError(fmt.Sprintf(`expected "." on a line, got %+q`, line))
+	} else {
+		return nil
+	}
 }
 
 func (c *Conn) parseXzver() (result []MessageOverview, err error) {
@@ -483,7 +521,7 @@ func parseOverview(r *bufio.Reader) ([]MessageOverview, error) {
 
 	for {
 		line, err := r.ReadString('\n')
-		if err == io.EOF {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			return result, nil
 		} else if err != nil {
 			return nil, err
@@ -600,6 +638,14 @@ func (c *Conn) Date() (time.Time, error) {
 		return time.Time{}, ProtocolError("invalid time: " + line)
 	}
 	return t, nil
+}
+
+// Attempt to enable connection-level compression, e.g. XFEATURE COMPRESS GZIP.
+// This will fail with an nntp.Error if the server doesn't support it, or some other
+// type of error in case something more severe has occurred.
+func (c *Conn) EnableCompression() error {
+	_, _, err := c.cmd(290, "XFEATURE COMPRESS GZIP")
+	return err
 }
 
 // List returns a list of groups present on the server.
