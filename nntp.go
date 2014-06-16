@@ -10,7 +10,6 @@ import (
 	"bufio"
 	"bytes"
 	"compress/flate"
-	"compress/zlib"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -291,11 +290,13 @@ func (c *Conn) body() io.Reader {
 // readStrings reads a list of strings from the NNTP connection,
 // stopping at a line containing only a . (Convenience method for
 // LIST, etc.)
-func (c *Conn) readStrings() ([]string, error) {
+func readStrings(r *bufio.Reader) ([]string, error) {
 	var sv []string
 	for {
-		line, err := c.r.ReadString('\n')
-		if err != nil {
+		line, err := r.ReadString('\n')
+		if err == io.EOF {
+			break
+		} else if err != nil {
 			return nil, err
 		}
 		if strings.HasSuffix(line, "\r\n") {
@@ -308,7 +309,7 @@ func (c *Conn) readStrings() ([]string, error) {
 		}
 		sv = append(sv, line)
 	}
-	return []string(sv), nil
+	return sv, nil
 }
 
 // Authenticate logs in to the NNTP server.
@@ -370,17 +371,37 @@ func (c *Conn) ModeReader() error {
 
 // NewGroups returns a list of groups added since the given time.
 func (c *Conn) NewGroups(since time.Time) ([]*Group, error) {
-	if _, _, err := c.cmd(231, "NEWGROUPS %s GMT", since.Format(timeFormatNew)); err != nil {
+	if _, line, err := c.cmd(231, "NEWGROUPS %s GMT", since.Format(timeFormatNew)); err != nil {
 		return nil, err
+	} else {
+		return c.readGroups(line)
 	}
-	return c.readGroups()
 }
 
-func (c *Conn) readGroups() ([]*Group, error) {
-	lines, err := c.readStrings()
+func (c *Conn) readGroups(line string) ([]*Group, error) {
+	var lines []string
+	var err error
+	
+	if strings.Contains(line, "[COMPRESS=GZIP]") {
+		zdr, err := newZlibDotResponse(c.r)
+		defer zdr.Close()
+		
+		if err == nil {
+			lines, err = readStrings(zdr.Reader)
+		}
+		
+		if err == nil {
+			err = zdr.Close()
+		}
+		
+	} else {
+		lines, err = readStrings(c.r)
+	}
+	
 	if err != nil {
 		return nil, err
 	}
+
 	return parseGroups(lines)
 }
 
@@ -391,7 +412,7 @@ func (c *Conn) NewNews(group string, since time.Time) ([]string, error) {
 		return nil, err
 	}
 
-	id, err := c.readStrings()
+	id, err := readStrings(c.r)
 	if err != nil {
 		return nil, err
 	}
@@ -454,38 +475,27 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 	// if we're using XFEATURE COMPRESS GZIP, the response line seems to contain this magic string
 	// (I wish I had a spec for this…)
 	if strings.Contains(line, "[COMPRESS=GZIP]") {
-		// the result is gzipped
-		gz, gzerr := zlib.NewReader(c.r)
-		if gzerr != nil {
-			return nil, gzerr
+		zdr, err := newZlibDotResponse(c.r)
+		defer zdr.Close()
+
+		var msgs []MessageOverview
+		if err == nil {
+			msgs, err = parseOverview(zdr.Reader)
 		}
 		
-		defer gz.Close()
+		if err == nil {
+			err = zdr.Close()
+		}
 		
-		msgs, err := parseOverview(bufio.NewReader(gz))
 		if err != nil {
 			return nil, err
+		} else {
+			return msgs, nil
 		}
-		
-		if err := c.readDotLine(); err != nil {
-			return nil, err
-		}
-		
-		return msgs, nil
 		
 	} else {
 		// plain response
 		return parseOverview(c.r)
-	}
-}
-
-func (c *Conn) readDotLine() error {
-	if line, err := c.r.ReadString('\n'); err != nil {
-		return err
-	} else if strings.TrimRight(line, "\r\n") != "." {
-		return ProtocolError(fmt.Sprintf(`expected "." on a line, got %+q`, line))
-	} else {
-		return nil
 	}
 }
 
@@ -616,14 +626,14 @@ func (c *Conn) Capabilities() ([]string, error) {
 	if _, _, err := c.cmd(101, "CAPABILITIES"); err != nil {
 		return nil, err
 	}
-	return c.readStrings()
+	return readStrings(c.r)
 }
 
 func (c *Conn) ListExtensions() ([]string, error) {
 	if _, _, err := c.cmd(202, "LIST EXTENSIONS"); err != nil {
 		return nil, err
 	}
-	return c.readStrings()
+	return readStrings(c.r)
 }
 
 // Date returns the current time on the server.
@@ -666,10 +676,11 @@ func (c *Conn) List(a ...string) ([]*Group, error) {
 			cmd += " " + a[1]
 		}
 	}
-	if _, _, err := c.cmd(215, cmd); err != nil {
+	if _, line, err := c.cmd(215, cmd); err != nil {
 		return nil, err
+	} else {
+		return c.readGroups(line)
 	}
-	return c.readGroups()
 }
 
 // Group changes the current group.
