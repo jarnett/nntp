@@ -246,7 +246,7 @@ func DialTLS(network, addr string, config *tls.Config) (*Conn, error) {
 		return nil, err
 	}
 	// handshake TLS
-	c = tls.Client(c, nil)
+	c = tls.Client(c, config)
 	if err = c.(*tls.Conn).Handshake(); err != nil {
 		return nil, err
 	}
@@ -381,23 +381,23 @@ func (c *Conn) NewGroups(since time.Time) ([]*Group, error) {
 func (c *Conn) readGroups(line string) ([]*Group, error) {
 	var lines []string
 	var err error
-	
+
 	if strings.Contains(line, "[COMPRESS=GZIP]") {
 		zdr, err := newZlibDotResponse(c.r)
 		defer zdr.Close()
-		
+
 		if err == nil {
 			lines, err = readStrings(zdr.Reader)
 		}
-		
+
 		if err == nil {
 			err = zdr.Close()
 		}
-		
+
 	} else {
 		lines, err = readStrings(c.r)
 	}
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -471,7 +471,7 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 			return nil, err
 		}
 	}
-	
+
 	// if we're using XFEATURE COMPRESS GZIP, the response line seems to contain this magic string
 	// (I wish I had a spec for this…)
 	if strings.Contains(line, "[COMPRESS=GZIP]") {
@@ -482,17 +482,17 @@ func (c *Conn) Overview(begin, end int64) ([]MessageOverview, error) {
 		if err == nil {
 			msgs, err = parseOverview(zdr.Reader)
 		}
-		
+
 		if err == nil {
 			err = zdr.Close()
 		}
-		
+
 		if err != nil {
 			return nil, err
 		} else {
 			return msgs, nil
 		}
-		
+
 	} else {
 		// plain response
 		return parseOverview(c.r)
@@ -503,11 +503,11 @@ func (c *Conn) parseXzver() (result []MessageOverview, err error) {
 	// XZVER is a yenc stream…
 	yencStream := &yencReader{r: c.r}
 	defer yencStream.Close()
-	
+
 	// containing a DEFLATE stream…
 	flateStream := flate.NewReader(yencStream)
 	defer flateStream.Close()
-	
+
 	// containing an overview stream…
 	result, err = parseOverview(bufio.NewReader(flateStream))
 
@@ -515,14 +515,14 @@ func (c *Conn) parseXzver() (result []MessageOverview, err error) {
 		// …with a dot at the end
 		flateStream.Close()
 		yencStream.Close()
-		
+
 		var line string
 		line, err = c.r.ReadString('\n')
 		if err == nil && strings.TrimRight(line, "\r\n") != "." {
 			return nil, fmt.Errorf("unexpected data after XZVER: %q", line)
 		}
 	}
-	
+
 	return
 }
 
